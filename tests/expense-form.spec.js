@@ -18,13 +18,6 @@ test.describe('Pharmacy Expenses Form', () => {
         const submitBtn = page.locator('button[type="submit"]');
         await submitBtn.click();
 
-        // Browser native validation might block submission, or custom JS validation.
-        // Our form uses "required" attribute, so browser handles it. 
-        // We can check if the input is invalid.
-
-        // However, our JS adds .error class and shows .form-error span on submit if we preventDefault correctly.
-        // Let's check for the visual error messages which our JS displays.
-
         // Check Pharmacy Number error
         const pharmacyError = page.locator('#error-pharmacy-number');
         await expect(pharmacyError).toBeVisible();
@@ -73,7 +66,7 @@ test.describe('Pharmacy Expenses Form', () => {
 
     test('should submit successfully with valid data', async ({ page }) => {
         // Mock the Webhook response
-        await page.route('**/webhook-test/**', async route => {
+        await page.route('**/webhook/**', async route => {
             const json = { status: 'success' };
             await route.fulfill({ json });
         });
@@ -82,7 +75,6 @@ test.describe('Pharmacy Expenses Form', () => {
         await page.fill('#pharmacy-number', '99');
         await page.selectOption('#category', 'Вода');
         await page.fill('#amount', '150');
-        // Comment is optional for 'Вода', leave empty
 
         // Submit
         await page.locator('button[type="submit"]').click();
@@ -91,5 +83,28 @@ test.describe('Pharmacy Expenses Form', () => {
         const modal = page.locator('#success-modal');
         await expect(modal).toBeVisible();
         await expect(modal.locator('.modal-title')).toHaveText('Успешно!');
+    });
+
+    test('should show error modal on server error', async ({ page }) => {
+        // Mock a 500 Server Error
+        await page.route('**/webhook/**', async route => {
+            await route.fulfill({ status: 500, body: 'Internal Server Error' });
+        });
+
+        // Fill Form
+        await page.fill('#pharmacy-number', '99');
+        await page.selectOption('#category', 'Вода');
+        await page.fill('#amount', '150');
+
+        // Submit
+        await page.locator('button[type="submit"]').click();
+
+        // Check Error Modal
+        const modal = page.locator('#error-modal');
+        await expect(modal).toBeVisible();
+        await expect(modal.locator('.modal-title')).toHaveText('Ошибка');
+        // Actual text might vary depending on app.js logic for fetch failure vs non-ok response
+        // In app.js: if (!response.ok) alert('Ошибка при отправке данных...') -> replaced with showErrorModal
+        await expect(modal.locator('#error-modal-text')).toHaveText('Ошибка при отправке данных. Попробуйте еще раз.');
     });
 });
